@@ -7,13 +7,22 @@ public class SwiftFlutterAwsPlugin: NSObject, FlutterPlugin {
     
     var pinpoint: AWSPinpoint?
     
-    let resultHandler: (Any) -> () = {_ in}
+    var internalRegister: FlutterPluginRegistrar!
+    var internalMessenger: FlutterBinaryMessenger!
+    var internalChannel: FlutterMethodChannel!
     
     public static func register(with registrar: FlutterPluginRegistrar) {
         let channel = FlutterMethodChannel(name: "flutter_aws_plugin", binaryMessenger: registrar.messenger())
-        let instance = SwiftFlutterAwsPlugin()
+        let instance = SwiftFlutterAwsPlugin.init(withRegister: registrar, message: registrar.messenger(), channel: channel)
         registrar.addApplicationDelegate(instance)
         registrar.addMethodCallDelegate(instance, channel: channel)
+    }
+    
+    init(withRegister register: FlutterPluginRegistrar, message: FlutterBinaryMessenger, channel: FlutterMethodChannel) {
+        super.init()
+        self.internalRegister = register
+        self.internalMessenger = message
+        self.internalChannel = channel
     }
     
     public func handle(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
@@ -36,7 +45,7 @@ public class SwiftFlutterAwsPlugin: NSObject, FlutterPlugin {
                             }
                         } else {
                             switch error {
-                            case URLError.cancelled, URLError.userCancelledAuthentication:
+                            case URLError.cancelled, URLError.userCancelledAuthentication, URLError.userAuthenticationRequired:
                                 result("")
                                 break
                             default:
@@ -59,7 +68,17 @@ public class SwiftFlutterAwsPlugin: NSObject, FlutterPlugin {
                                     }
                                 }
                                 if let token = token {
-                                    result(token.idToken?.claims)
+                                    var dict = [String: Any]()
+                                    dict["token"] = token.idToken?.tokenString
+                                    dict["data"] = token.idToken?.claims
+                                    do {
+                                        let jsonData = try JSONSerialization.data(withJSONObject: dict, options: .prettyPrinted)
+                                        let theJSONText = String(data: jsonData,
+                                                                 encoding: .utf8)
+                                        result(theJSONText ?? "")
+                                    } catch {
+                                        print(error.localizedDescription)
+                                    }
                                 }
                             })
                         }
@@ -107,7 +126,17 @@ public class SwiftFlutterAwsPlugin: NSObject, FlutterPlugin {
                                     }
                                 }
                                 if let token = token {
-                                    result(token.idToken?.claims)
+                                    var dict = [String: Any]()
+                                    dict["token"] = token.idToken?.tokenString
+                                    dict["data"] = token.idToken?.claims
+                                    do {
+                                        let jsonData = try JSONSerialization.data(withJSONObject: dict, options: .prettyPrinted)
+                                        let theJSONText = String(data: jsonData,
+                                                                 encoding: .utf8)
+                                        result(theJSONText ?? "")
+                                    } catch {
+                                        print(error.localizedDescription)
+                                    }
                                 }
                             })
                         }
@@ -115,26 +144,27 @@ public class SwiftFlutterAwsPlugin: NSObject, FlutterPlugin {
                 }
             }
         } else if call.method == "signOut" {
-            AWSMobileClient.sharedInstance().signOut { (error) in
-                if let error = error as? AWSMobileClientError {
-                    if let errorHandler = getErrorMsg(error) {
-                        var errorDict = [String: Any]()
-                        errorDict["errorCode"] = errorHandler.code.localizedDescription
-                        errorDict["message"] = errorHandler.errorMsg
-                        result(errorDict)
-                    }
-                } else {
-                    result("Sign Out")
-                }
-            }
+            result("Sign Out")
+            AWSMobileClient.sharedInstance().signOut()
         } else if call.method == "initPinPoint" {
             let pinpointConfiguration = AWSPinpointConfiguration.defaultPinpointConfiguration(launchOptions: nil)
             pinpoint = AWSPinpoint(configuration: pinpointConfiguration)
         } else if call.method == "initNotificationPermission" {
             UNUserNotificationCenter.current().requestAuthorization(options: [.badge, .sound, .alert]) { (granted, error) in
                 if granted {
-                    UIApplication.shared.registerForRemoteNotifications()
+                    DispatchQueue.main.async {
+                        UIApplication.shared.registerForRemoteNotifications()
+                    }
                 }
+            }
+        } else if call.method == "logEvent" {
+            if let analyticsClient = pinpoint?.analyticsClient {
+                let event = analyticsClient.createEvent(withEventType: "EventName")
+                event.addAttribute("DemoAttributeValue1", forKey: "DemoAttribute1")
+                event.addAttribute("DemoAttributeValue2", forKey: "DemoAttribute2")
+                event.addMetric(NSNumber(value: arc4random() % 65535), forKey: "EventName")
+                analyticsClient.record(event)
+                analyticsClient.submitEvents()
             }
         }
     }
@@ -154,15 +184,7 @@ public class SwiftFlutterAwsPlugin: NSObject, FlutterPlugin {
         for i in 0..<deviceToken.count {
             token = token + String(format: "%02.2hhx", arguments: [deviceToken[i]])
         }
-        let alert = UIAlertController(title: "Notification Received",
-                                      message: nil,
-                                      preferredStyle: .alert)
-        alert.addAction(UIAlertAction(title: "Ok", style: .default, handler: nil))
-        alert.addTextField { (textField) -> Void in
-            textField.text = token
-        }
-        UIApplication.shared.keyWindow?.rootViewController?.present(
-            alert, animated: true, completion:nil)
+        self.internalChannel.invokeMethod("pushReceiveToken", arguments: token)
         pinpoint!.notificationManager.interceptDidRegisterForRemoteNotifications(
             withDeviceToken: deviceToken)
     }
@@ -170,8 +192,7 @@ public class SwiftFlutterAwsPlugin: NSObject, FlutterPlugin {
     public func application(_ application: UIApplication, didReceiveRemoteNotification userInfo: [AnyHashable : Any], fetchCompletionHandler completionHandler: @escaping (UIBackgroundFetchResult) -> Void) -> Bool {
         pinpoint!.notificationManager.interceptDidReceiveRemoteNotification(
             userInfo, fetchCompletionHandler: completionHandler)
-        
-        self.resultHandler(userInfo.description)
+        self.internalChannel.invokeMethod("pushReceiveUserInfo", arguments: userInfo)
         return true
     }
 }

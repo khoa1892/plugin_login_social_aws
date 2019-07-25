@@ -2,7 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/services.dart';
 
-typedef void PinPointResultHandler(Map results);
+typedef void PinPointResultHandler(dynamic results);
 
 class FlutterAwsPlugin {
   static const MethodChannel _channel =
@@ -13,13 +13,13 @@ class FlutterAwsPlugin {
     return version;
   }
 
-  static Future<Map<dynamic, dynamic>> get loginByFacebook async {
-    final Map<dynamic, dynamic> result = await _channel.invokeMethod('loginByFacebook');
+  static Future<String> get loginByFacebook async {
+    final String result = await _channel.invokeMethod('loginByFacebook');
     return result;
   }
 
-  static Future<Map<dynamic, dynamic>> get loginByGoogle async {
-    final Map<dynamic, dynamic> result = await _channel.invokeMethod('loginByGoogle');
+  static Future<String> get loginByGoogle async {
+    final String result = await _channel.invokeMethod('loginByGoogle');
     return result;
   }
 
@@ -36,21 +36,32 @@ class FlutterAwsPlugin {
     await _channel.invokeMethod('initNotificationPermission');
   }
 
+  static Future<void> get logEvent async {
+    await _channel.invokeMethod('logEvent');
+  }
+
   Future<void> initPinPointHandler() async {
     _channel.setMethodCallHandler(_platformCallHandler);
   }
 
-  PinPointResultHandler pinpointHandler;
+  PinPointResultHandler receiveTokenHandler;
+  PinPointResultHandler receiveUserInfoHandler;
   Future<void> _platformCallHandler(MethodCall call) async {
     switch(call.method) {
-      case "pushReceived":
-        if(pinpointHandler != null) {
-          pinpointHandler(call.arguments);
+      case "pushReceiveToken":
+        if(receiveTokenHandler != null) {
+          receiveTokenHandler(call.arguments);
+        }
+        break;
+      case "pushReceiveUserInfo":
+        if(receiveUserInfoHandler != null) {
+          receiveUserInfoHandler(call.arguments);
         }
         break;
       default:
         print('unknow method');
     }
+    return Future.value();
   }
 
 }
