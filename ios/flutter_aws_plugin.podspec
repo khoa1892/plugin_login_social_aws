@@ -18,6 +18,7 @@ AWS Plugin
   s.dependency 'AWSMobileClient'
   s.dependency 'AWSCognito'
   s.dependency 'AWSCognitoIdentityProvider'
+  s.dependency 'AWSPinpoint'
 
   s.ios.deployment_target = '10.0'
 end
