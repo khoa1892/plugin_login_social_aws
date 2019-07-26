@@ -1,0 +1,50 @@
+{
+    "UserAgent": "aws-amplify-cli/0.1.0",
+    "Version": "1.0",
+    "IdentityManager": {
+        "Default": {}
+    },
+    "CredentialsProvider": {
+        "CognitoIdentity": {
+            "Default": {
+                "PoolId": "ap-southeast-1:b878af18-86cc-4570-8293-b90159a931de",
+                "Region": "ap-southeast-1"
+            }
+        }
+    },
+    "CognitoUserPool": {
+        "Default": {
+            "PoolId": "ap-southeast-1_heuHGdXIe",
+            "AppClientId": "10qb0h4k1tqso3nvjdt6a4s0sc",
+            "AppClientSecret": "104u1rkt0256l4akrqao6vlgfjlohtahqshg7hp6vgd3mod2m07q",
+            "Region": "ap-southeast-1"
+        }
+    },
+    "Auth": {
+        "Default": {
+            "OAuth": {
+                "WebDomain": "lazaha-dev.auth.ap-southeast-1.amazoncognito.com",
+                "AppClientId": "10qb0h4k1tqso3nvjdt6a4s0sc",
+                "AppClientSecret": "104u1rkt0256l4akrqao6vlgfjlohtahqshg7hp6vgd3mod2m07q",
+                "SignInRedirectURI": "myapp://",
+                "SignOutRedirectURI": "myapp://",
+                "Scopes": ["openid", "email"]
+            }
+        }
+    },
+    "AppSync": {
+        "Default": {
+            "ApiUrl": "https://6zfpxzhvijarpmpz3xwsvjbzvm.appsync-api.ap-southeast-1.amazonaws.com/graphql",
+            "Region": "ap-southeast-1",
+            "AuthMode": "AMAZON_COGNITO_USER_POOLS",
+            "ClientDatabasePrefix": "handmade-dev-api_AMAZON_COGNITO_USER_POOLS"
+        },
+        "handmade-dev-api_API_KEY": {
+            "ApiUrl": "https://6zfpxzhvijarpmpz3xwsvjbzvm.appsync-api.ap-southeast-1.amazonaws.com/graphql",
+            "Region": "ap-southeast-1",
+            "AuthMode": "API_KEY",
+            "ApiKey": "da2-pbe4wwl65fgmzntjnofo3hsf4e",
+            "ClientDatabasePrefix": "handmade-dev-api_API_KEY"
+        }
+    }
+}
