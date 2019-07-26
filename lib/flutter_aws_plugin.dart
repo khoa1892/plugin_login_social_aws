@@ -43,7 +43,7 @@ class FlutterAwsPlugin {
 
   static Future<String> logCustomEvent(String eventName, Map<String, String> attributes, String metric) async {
     final String result = await _channel.invokeMethod("logCustomEvent",
-        {"eventName": eventName, "atributes": attributes, "metric": metric});
+        {"eventName": eventName, "attributes": attributes, "metric": metric});
     return result;
   }
 
