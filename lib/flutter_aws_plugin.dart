@@ -28,6 +28,11 @@ class FlutterAwsPlugin {
     return result;
   }
 
+  static Future<String> get getToken async {
+    final String result = await _channel.invokeMethod('getToken');
+    return result;
+  }
+
   static Future<void> get initPinPoint async {
     await _channel.invokeMethod('initPinPoint');
   }
