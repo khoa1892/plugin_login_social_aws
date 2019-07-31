@@ -2,115 +2,197 @@ package com.skg.flutter_aws_plugin
 
 import android.annotation.SuppressLint
 import android.app.Activity
-import android.content.Context
-import android.content.Intent
+import android.app.Application
 import android.os.Bundle
-import android.os.Handler
 import android.util.Log
-import com.amazonaws.mobile.client.AWSMobileClient
-import com.amazonaws.mobile.client.Callback
-import com.amazonaws.mobile.client.UserState
-import com.amazonaws.mobile.client.UserStateDetails
+import com.amazonaws.mobile.client.*
 import com.amazonaws.mobile.client.results.Tokens
+import com.google.gson.Gson
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 import io.flutter.plugin.common.MethodChannel.MethodCallHandler
 import io.flutter.plugin.common.MethodChannel.Result
 import io.flutter.plugin.common.PluginRegistry.Registrar
-import java.lang.Exception
 
-class FlutterAwsPlugin @SuppressLint("ObsoleteSdkInt") constructor(var context: Context, var activity: Activity, var registrar: Registrar): MethodCallHandler {
-  val REQUEST_CODE_FACEBOOK = 1
-  val REQUEST_CODE_GOOGLE = 2
-  val REQUEST_CODE_LOGOUT = 3
 
-  var data: String =""
-  companion object {
-    @JvmStatic
-    fun registerWith(registrar: Registrar) {
-      val channel = MethodChannel(registrar.messenger(), "flutter_aws_plugin")
-      channel.setMethodCallHandler(FlutterAwsPlugin(registrar.activity().baseContext, registrar.activity(), registrar))
+class FlutterAwsPlugin @SuppressLint("ObsoleteSdkInt") constructor(var activity: Activity, var registrar: Registrar) : MethodCallHandler {
+    var callBack: Application.ActivityLifecycleCallbacks
+    companion object {
+        @JvmStatic
+        fun registerWith(registrar: Registrar) {
+            val channel = MethodChannel(registrar.messenger(), "flutter_aws_plugin")
+            channel.setMethodCallHandler(FlutterAwsPlugin(registrar.activity(), registrar))
+        }
     }
-  }
 
-  override fun onMethodCall(call: MethodCall, result: Result) {
-    when {
-      call.method == "loginByFacebook" -> {
-        val intent = Intent(activity.applicationContext, LoginWithHostedUI::class.java)
-        val bundle = Bundle()
-        bundle.putBoolean("facebook", true)
-        intent.putExtras(bundle)
-        activity.startActivityForResult(intent, REQUEST_CODE_FACEBOOK)
-      }
-      call.method == "loginByGoogle" -> {
-        val intent = Intent(activity.applicationContext, LoginWithHostedUI::class.java)
-        val bundle = Bundle()
-        bundle.putBoolean("google", true)
-        intent.putExtras(bundle)
-        activity.startActivityForResult(intent, REQUEST_CODE_GOOGLE)
+    init {
+        callBack = object : Application.ActivityLifecycleCallbacks {
+            override fun onActivityPaused(p0: Activity?) {
 
-      }
-      call.method == "signOut" -> {
-        val intent = Intent(activity.applicationContext, LoginWithHostedUI::class.java)
-        val bundle = Bundle()
-        bundle.putBoolean("logOut", true)
-        intent.putExtras(bundle)
-        activity.startActivityForResult(intent, REQUEST_CODE_LOGOUT)
-      }
-      else -> {
-        result.notImplemented()
-      }
+            }
+
+            override fun onActivityResumed(p0: Activity?) {
+                val activityIntent = p0?.intent
+                if (activityIntent?.data != null && "myapp" == activityIntent.data!!.scheme) {
+                    AWSMobileClient.getInstance().handleAuthResponse(activityIntent)
+                }
+            }
+
+            override fun onActivityStarted(p0: Activity?) {
+            }
+
+            override fun onActivityDestroyed(p0: Activity?) {
+            }
+
+            override fun onActivitySaveInstanceState(p0: Activity?, p1: Bundle?) {
+            }
+
+            override fun onActivityStopped(p0: Activity?) {
+            }
+
+            override fun onActivityCreated(p0: Activity?, p1: Bundle?) {
+            }
+        }
+        activity.application.registerActivityLifecycleCallbacks(callBack)
     }
-    registrar.addActivityResultListener { requestCode, resultCode, intent ->
-      if (requestCode == REQUEST_CODE_GOOGLE && resultCode == 0 || requestCode == REQUEST_CODE_FACEBOOK && resultCode == 0) {
-          Handler().postDelayed({
-          }, 1000)
-        AWSMobileClient.getInstance().initialize(activity.applicationContext,object: Callback<UserStateDetails>{
-          override fun onResult(state: UserStateDetails?) {
-              if(state?.userState== UserState.SIGNED_IN){
-                AWSMobileClient.getInstance().getTokens(object: Callback<Tokens> {
-                  override fun onResult(token: Tokens?) {
-                    result.success(mapOf("email" to token?.idToken?.getClaim("email"),
-                            "name" to token?.idToken?.getClaim("name")))
-                    Log.d("LOGIN", "onResult: success" )
-                    return
-                  }
 
-                  override fun onError(e: Exception?) {
-                    result.error(e?.message,e?.localizedMessage,e)
-                    return
-                  }
+    override fun onMethodCall(call: MethodCall, result: Result) {
+        when {
+            call.method == "loginByFacebook" -> {
+                AWSMobileClient.getInstance().initialize(activity.applicationContext, object : Callback<UserStateDetails> {
+                    override fun onResult(userStateDetails: UserStateDetails) {
+                        val hostedUIOptions = HostedUIOptions.builder()
+                                .scopes("openid", "email")
+                                .identityProvider("Facebook")
+                                .build()
 
-                })
+                        val signInUIOptions = SignInUIOptions.builder()
+                                .hostedUIOptions(hostedUIOptions)
+                                .build()
+                        AWSMobileClient.getInstance()
+                                .showSignIn(activity, signInUIOptions, object : Callback<UserStateDetails> {
+                                    override fun onResult(details: UserStateDetails) {
+                                        Log.d("LOGIN", "onResult: " + details.userState)
+                                        AWSMobileClient.getInstance().getTokens(object : Callback<Tokens> {
+                                            override fun onResult(token: Tokens?) {
+                                                val gson = Gson()
+                                                val mapData = HashMap<String, String?>()
+                                                mapData["auth_time"] = token?.idToken?.getClaim("auth_time")
+                                                mapData["at_hash"] = token?.idToken?.getClaim("at_hash")
+                                                mapData["aud"] = token?.idToken?.getClaim("aud")
+                                                mapData["identities"] = token?.idToken?.getClaim("identities")
+                                                mapData["email"] = token?.idToken?.getClaim("email")
+                                                mapData["token_use"] = token?.idToken?.getClaim("token_use")
+                                                mapData["sub"] = token?.idToken?.getClaim("sub")
+                                                mapData["iss"] = token?.idToken?.getClaim("iss")
+                                                mapData["exp"] = token?.idToken?.getClaim("exp")
+                                                mapData["iat"] = token?.idToken?.getClaim("iat")
+                                                mapData["cognito:username"] = token?.idToken?.getClaim("cognito:username")
+                                                mapData["cognito:groups"] = token?.idToken?.getClaim("cognito:groups")
+                                                val jsonData: String = gson.toJson(mapData)
+                                                this@FlutterAwsPlugin.activity.runOnUiThread {
+                                                    result.success(jsonData)
+                                                }
+                                            }
 
-              }
-          }
+                                            override fun onError(e: Exception?) {
+                                                print(e?.message)
 
-          override fun onError(e: Exception?) {
-          }
+                                            }
 
-        })
-        intent.getStringArrayExtra("email")
+                                        })
+                                    }
 
-      }else if(requestCode == REQUEST_CODE_LOGOUT && resultCode == 0 ){
-        AWSMobileClient.getInstance().initialize(activity.applicationContext,object: Callback<UserStateDetails>{
-          override fun onResult(state: UserStateDetails?) {
-            result.success(mapOf("state" to state?.details?.values))
-            return
-          }
+                                    override fun onError(e: Exception) {
+                                        Log.e("LOGIN", "onError: ", e)
+                                    }
+                                })
 
-          override fun onError(e: Exception?) {
-            result.error(e?.message,e?.localizedMessage,null)
+                    }
 
-          }
+                    override fun onError(e: Exception) {
+                        Log.e("INIT", "Initialization error.", e)
+                        this@FlutterAwsPlugin.activity.runOnUiThread {
 
+                            result.error("Error", "Message", e)
+                        }
+                    }
+                }
+                )
+            }
+            call.method == "loginByGoogle" -> {
+                AWSMobileClient.getInstance().initialize(activity.applicationContext, object : Callback<UserStateDetails> {
+                    override fun onResult(userStateDetails: UserStateDetails) {
+                        val hostedUIOptions = HostedUIOptions.builder()
+                                .scopes("openid", "email")
+                                .identityProvider("Google")
+                                .build()
 
-        })
-      }else{
+                        val signInUIOptions = SignInUIOptions.builder()
+                                .hostedUIOptions(hostedUIOptions)
+                                .build()
 
-      }
-      true
+                        AWSMobileClient.getInstance()
+                                .showSignIn(activity, signInUIOptions, object : Callback<UserStateDetails> {
+                                    override fun onResult(details: UserStateDetails) {
+                                        Log.d("LOGIN", "onResult: " + details.userState)
+                                        AWSMobileClient.getInstance().getTokens(object : Callback<Tokens> {
+                                            override fun onResult(token: Tokens?) {
+                                                val gson = Gson()
+                                                val mapData = HashMap<String, String?>()
+                                                mapData["a  uth_time"] = token?.idToken?.getClaim("auth_time")
+                                                mapData["at_hash"] = token?.idToken?.getClaim("at_hash")
+                                                mapData["aud"] = token?.idToken?.getClaim("aud")
+                                                mapData["identities"] = token?.idToken?.getClaim("identities")
+                                                mapData["email"] = token?.idToken?.getClaim("email")
+                                                mapData["token_use"] = token?.idToken?.getClaim("token_use")
+                                                mapData["sub"] = token?.idToken?.getClaim("sub")
+                                                mapData["iss"] = token?.idToken?.getClaim("iss")
+                                                mapData["exp"] = token?.idToken?.getClaim("exp")
+                                                mapData["iat"] = token?.idToken?.getClaim("iat")
+                                                mapData["cognito:username"] = token?.idToken?.getClaim("cognito:username")
+                                                mapData["cognito:groups"] = token?.idToken?.getClaim("cognito:groups")
+                                                val jsonData: String = gson.toJson(mapData)
+                                                this@FlutterAwsPlugin.activity.runOnUiThread {
+                                                    result.success(jsonData)
+                                                }
+                                            }
+
+                                            override fun onError(e: Exception?) {
+                                                print(e?.message)
+                                            }
+
+                                        })
+                                    }
+
+                                    override fun onError(e: Exception) {
+                                        Log.e("LOGIN", "onError: ", e)
+                                    }
+                                })
+                    }
+
+                    override fun onError(e: Exception) {
+                        Log.e("INIT", "Initialization error.", e)
+                    }
+                }
+                )
+
+            }
+            call.method == "signOut" -> {
+                AWSMobileClient.getInstance()
+                        .signOut(SignOutOptions.builder().invalidateTokens(true).build(), object : Callback<Void> {
+                            override fun onResult(result: Void?) {
+
+                            }
+
+                            override fun onError(e: Exception?) {
+                            }
+                        })
+            }
+            else -> {
+                result.notImplemented()
+            }
+        }
     }
-  }
 }
 // Try with call back
