@@ -6,6 +6,7 @@ import android.app.Application
 import android.os.Bundle
 import android.util.Log
 import com.amazonaws.mobile.client.*
+import com.amazonaws.mobile.client.results.Token
 import com.amazonaws.mobile.client.results.Tokens
 import com.google.gson.Gson
 import io.flutter.plugin.common.MethodCall
@@ -188,6 +189,19 @@ class FlutterAwsPlugin @SuppressLint("ObsoleteSdkInt") constructor(var activity:
                             override fun onError(e: Exception?) {
                             }
                         })
+            }
+            call.method == "getToken" -> {
+                AWSMobileClient.getInstance().getTokens(object: Callback<Tokens>{
+                    override fun onResult(token: Tokens?) {
+                        result.success(token?.idToken)
+                    }
+
+                    override fun onError(e: java.lang.Exception?) {
+                        Log.i("Error",e?.message)
+                    }
+
+
+                })
             }
             else -> {
                 result.notImplemented()
