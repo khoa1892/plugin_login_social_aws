@@ -1,11 +1,8 @@
 import Flutter
 import UIKit
 import AWSMobileClient
-import AWSPinpoint
 
 public class SwiftFlutterAwsPlugin: NSObject, FlutterPlugin {
-    
-    private var pinpoint: AWSPinpoint?
     
     private var internalRegister: FlutterPluginRegistrar!
     private var internalMessenger: FlutterBinaryMessenger!
@@ -140,10 +137,8 @@ public class SwiftFlutterAwsPlugin: NSObject, FlutterPlugin {
         } else if call.method == "signOut" {
             result("Sign Out")
             AWSMobileClient.sharedInstance().signOut()
-        } else if call.method == "initPinPoint" {
-            let pinpointConfiguration = AWSPinpointConfiguration.defaultPinpointConfiguration(launchOptions: nil)
-            pinpoint = AWSPinpoint(configuration: pinpointConfiguration)
-        } else if call.method == "initNotificationPermission" {
+        }else if call.method == "initNotificationPermission" {
+            UNUserNotificationCenter.current().delegate = self
             UNUserNotificationCenter.current().requestAuthorization(options: [.badge, .sound, .alert]) { (granted, error) in
                 if granted {
                     DispatchQueue.main.async {
@@ -151,32 +146,7 @@ public class SwiftFlutterAwsPlugin: NSObject, FlutterPlugin {
                     }
                 }
             }
-        } else if call.method == "logCustomEvent" {
-            if let dict = call.arguments as? [String: Any] {
-                if let eventName = dict["eventName"] as? String,
-                    let attributes = dict["attributes"] as? [String: String],
-                    let metric = dict["metric"] as? String {
-                    if let analyticsClient = pinpoint?.analyticsClient {
-                        let event = analyticsClient.createEvent(withEventType: eventName)
-                        for (key, value) in attributes {
-                            event.addAttribute("\(value)", forKey: key)
-                        }
-                        event.addMetric(NSNumber(value: Int(metric)!), forKey: eventName)
-                        analyticsClient.record(event)
-                        analyticsClient.submitEvents { (task) -> Any? in
-                            if let error = task.error {
-                                result(error.localizedDescription)
-                            } else {
-                                result("success")
-                            }
-                            return nil
-                        }
-                    }
-                }
-            } else {
-                result("Fail")
-            }
-        } else if call.method == "getToken" {
+        }else if call.method == "getToken" {
             AWSMobileClient.sharedInstance().getTokens({ (token, error) in
                 if let error = error as? AWSMobileClientError {
                     if let errorHandler = getErrorMsg(error) {
@@ -209,15 +179,17 @@ public class SwiftFlutterAwsPlugin: NSObject, FlutterPlugin {
             token = token + String(format: "%02.2hhx", arguments: [deviceToken[i]])
         }
         self.internalChannel.invokeMethod("pushReceiveToken", arguments: token)
-        pinpoint!.notificationManager.interceptDidRegisterForRemoteNotifications(
-            withDeviceToken: deviceToken)
     }
-    
-    public func application(_ application: UIApplication, didReceiveRemoteNotification userInfo: [AnyHashable : Any], fetchCompletionHandler completionHandler: @escaping (UIBackgroundFetchResult) -> Void) -> Bool {
-        pinpoint!.notificationManager.interceptDidReceiveRemoteNotification(
-            userInfo, fetchCompletionHandler: completionHandler)
-        self.internalChannel.invokeMethod("pushReceiveUserInfo", arguments: userInfo)
-        return true
+}
+
+extension SwiftFlutterAwsPlugin: UNUserNotificationCenterDelegate {
+    public func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification, withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void) {
+        self.internalChannel.invokeMethod("pushReceiveUserInfo", arguments: notification.request.content.userInfo)
+        completionHandler([.sound])
+    }
+    public func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse, withCompletionHandler completionHandler: @escaping () -> Void) {
+        self.internalChannel.invokeMethod("pushReceiveUserInfo", arguments: response.notification.request.content.userInfo)
+        completionHandler()
     }
 }
 

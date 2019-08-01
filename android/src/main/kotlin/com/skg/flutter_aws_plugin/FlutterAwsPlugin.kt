@@ -194,7 +194,7 @@ class FlutterAwsPlugin @SuppressLint("ObsoleteSdkInt") constructor(var activity:
                 AWSMobileClient.getInstance().getTokens(object: Callback<Tokens>{
                     override fun onResult(token: Tokens?) {
                         this@FlutterAwsPlugin.activity.runOnUiThread {
-                            result.success(token?.idToken)
+                            result.success(token?.idToken?.tokenString)
                         }
                     }
 
